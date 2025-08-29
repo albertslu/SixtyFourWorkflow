@@ -6,7 +6,8 @@ import {
   ChevronLeftIcon, 
   ChevronRightIcon,
   Bars3Icon,
-  XMarkIcon 
+  XMarkIcon,
+  LinkIcon
 } from '@heroicons/react/24/outline'
 import { toast } from 'react-hot-toast'
 import { BlockConfig, WorkflowConnection, BlockType, Workflow } from '../types/workflow'
@@ -70,6 +71,8 @@ export default function WorkflowBuilder({ onJobCreated }: WorkflowBuilderProps) 
   const [draggedBlock, setDraggedBlock] = useState<string | null>(null)
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 })
   const [isDragging, setIsDragging] = useState(false)
+  const [connectingFrom, setConnectingFrom] = useState<string | null>(null)
+  const [isConnecting, setIsConnecting] = useState(false)
   const workflowCanvasRef = useRef<HTMLDivElement>(null)
 
   const addBlock = useCallback((blockType: BlockType, position?: { x: number; y: number }) => {
@@ -192,6 +195,52 @@ export default function WorkflowBuilder({ onJobCreated }: WorkflowBuilderProps) 
       setIsSaving(false)
     }
   }, [blocks, connections, workflowName, savedWorkflowId])
+
+  const startConnection = useCallback((blockId: string) => {
+    setConnectingFrom(blockId)
+    setIsConnecting(true)
+    toast('Click on another block to connect', { icon: '🔗' })
+  }, [])
+
+  const finishConnection = useCallback((targetId: string) => {
+    if (!connectingFrom || !isConnecting) return
+
+    // Check if connection already exists
+    const existingConnection = connections.find(conn => 
+      conn.source_block_id === connectingFrom && conn.target_block_id === targetId
+    )
+    
+    if (existingConnection) {
+      toast.error('Connection already exists')
+      setConnectingFrom(null)
+      setIsConnecting(false)
+      return
+    }
+
+    // Check for circular dependencies (basic check)
+    if (connectingFrom === targetId) {
+      toast.error('Cannot connect block to itself')
+      setConnectingFrom(null)
+      setIsConnecting(false)
+      return
+    }
+
+    const newConnection: WorkflowConnection = {
+      connection_id: uuidv4(),
+      source_block_id: connectingFrom,
+      target_block_id: targetId
+    }
+
+    setConnections(prev => [...prev, newConnection])
+    toast.success('Blocks connected')
+    setConnectingFrom(null)
+    setIsConnecting(false)
+  }, [connections, connectingFrom, isConnecting])
+
+  const cancelConnection = useCallback(() => {
+    setConnectingFrom(null)
+    setIsConnecting(false)
+  }, [])
 
   const connectBlocks = useCallback((sourceId: string, targetId: string) => {
     // Check if connection already exists
@@ -396,13 +445,15 @@ export default function WorkflowBuilder({ onJobCreated }: WorkflowBuilderProps) 
           className="w-full h-full bg-gray-50 relative overflow-hidden"
           onDrop={handlePaletteDrop}
           onDragOver={handleDragOver}
+          onClick={isConnecting ? cancelConnection : undefined}
           style={{ 
             backgroundImage: `
               linear-gradient(to right, #e5e7eb 1px, transparent 1px),
               linear-gradient(to bottom, #e5e7eb 1px, transparent 1px)
             `,
             backgroundSize: '20px 20px',
-            backgroundPosition: '0 0'
+            backgroundPosition: '0 0',
+            cursor: isConnecting ? 'crosshair' : 'default'
           }}
         >
           {/* Blocks */}
@@ -414,63 +465,90 @@ export default function WorkflowBuilder({ onJobCreated }: WorkflowBuilderProps) 
                 left: block.position.x,
                 top: block.position.y,
                 transform: 'translate(-50%, -50%)',
-                zIndex: draggedBlock === block.block_id ? 1000 : 1
+                zIndex: draggedBlock === block.block_id ? 1000 : 5
               }}
             >
               <BlockComponent
                 block={block}
                 onRemove={() => removeBlock(block.block_id)}
                 onConfigure={() => openParametersModal(block)}
-                onConnect={(targetId: string) => connectBlocks(block.block_id, targetId)}
+                onConnect={() => startConnection(block.block_id)}
+                onConnectionTarget={() => finishConnection(block.block_id)}
                 onMouseDown={(event: React.MouseEvent) => handleMouseDown(block.block_id, event)}
                 connections={connections.filter(conn => 
                   conn.source_block_id === block.block_id || conn.target_block_id === block.block_id
                 )}
                 isDragging={draggedBlock === block.block_id}
+                isConnecting={isConnecting}
+                isConnectionSource={connectingFrom === block.block_id}
+                canBeTarget={isConnecting && connectingFrom !== block.block_id}
               />
             </div>
           ))}
 
           {/* Connection Lines */}
-          <svg className="absolute inset-0 pointer-events-none" style={{ zIndex: 2 }}>
+          <svg 
+            className="absolute inset-0 pointer-events-none" 
+            style={{ zIndex: 10 }}
+            width="100%" 
+            height="100%"
+          >
+
+            
+
             {connections.map((connection) => {
               const sourceBlock = blocks.find(b => b.block_id === connection.source_block_id)
               const targetBlock = blocks.find(b => b.block_id === connection.target_block_id)
               
               if (!sourceBlock || !targetBlock) return null
 
+              // Calculate connection points (from right edge of source to left edge of target)
+              const sourceX = sourceBlock.position.x + 100 // Right edge of source block
+              const sourceY = sourceBlock.position.y
+              const targetX = targetBlock.position.x - 100 // Left edge of target block
+              const targetY = targetBlock.position.y
+
               return (
-                <line
-                  key={connection.connection_id}
-                  x1={sourceBlock.position.x}
-                  y1={sourceBlock.position.y}
-                  x2={targetBlock.position.x}
-                  y2={targetBlock.position.y}
-                  stroke="#3b82f6"
-                  strokeWidth="2"
-                  markerEnd="url(#arrowhead)"
-                  className="drop-shadow-sm"
-                />
+                <g key={connection.connection_id}>
+                  {/* Invisible thick line for easier clicking */}
+                  <line
+                    x1={sourceX}
+                    y1={sourceY}
+                    x2={targetX}
+                    y2={targetY}
+                    stroke="transparent"
+                    strokeWidth="10"
+                    style={{ cursor: 'pointer' }}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      removeConnection(connection.connection_id)
+                    }}
+                  />
+                  {/* Visible connection line */}
+                  <line
+                    x1={sourceX}
+                    y1={sourceY}
+                    x2={targetX}
+                    y2={targetY}
+                    stroke="#3b82f6"
+                    strokeWidth="2"
+                    opacity="0.8"
+                    style={{ pointerEvents: 'none' }}
+                  />
+                </g>
               )
             })}
-            
-            {/* Arrow marker definition */}
-            <defs>
-              <marker
-                id="arrowhead"
-                markerWidth="10"
-                markerHeight="7"
-                refX="9"
-                refY="3.5"
-                orient="auto"
-              >
-                <polygon
-                  points="0 0, 10 3.5, 0 7"
-                  fill="#3b82f6"
-                />
-              </marker>
-            </defs>
           </svg>
+
+          {/* Connection Mode Overlay */}
+          {isConnecting && (
+            <div className="absolute top-4 left-1/2 transform -translate-x-1/2 z-50">
+              <div className="bg-blue-600 text-white px-4 py-2 rounded-lg shadow-lg flex items-center space-x-2">
+                <LinkIcon className="w-5 h-5" />
+                <span>Click on connection points (circles) to connect blocks, or click anywhere to cancel</span>
+              </div>
+            </div>
+          )}
 
           {/* Empty State */}
           {blocks.length === 0 && (

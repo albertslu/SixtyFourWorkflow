@@ -11,6 +11,27 @@ from core.config import settings
 from models.workflow import Job, Workflow, JobStatus, JobProgress, JobResult
 
 
+def serialize_datetime(obj):
+    """JSON serializer for datetime objects"""
+    if isinstance(obj, datetime):
+        return obj.isoformat()
+    raise TypeError(f"Object of type {type(obj)} is not JSON serializable")
+
+
+def workflow_to_dict(workflow: Workflow) -> Dict[str, Any]:
+    """Convert workflow to dictionary with proper datetime handling"""
+    data = {
+        'workflow_id': workflow.workflow_id,
+        'name': workflow.name,
+        'description': workflow.description,
+        'blocks': [block.dict() for block in workflow.blocks],
+        'connections': [conn.dict() for conn in workflow.connections],
+        'created_at': workflow.created_at.isoformat() if workflow.created_at else datetime.utcnow().isoformat(),
+        'updated_at': workflow.updated_at.isoformat() if workflow.updated_at else datetime.utcnow().isoformat()
+    }
+    return data
+
+
 class DatabaseService:
     """Service for database operations using Supabase"""
     
@@ -41,17 +62,30 @@ class DatabaseService:
     async def save_workflow(self, workflow: Workflow) -> Dict[str, Any]:
         """Save a workflow to the database"""
         if not self.client:
-            self._in_memory_workflows[workflow.workflow_id] = workflow.dict()
-            return workflow.dict()
+            workflow_data = workflow_to_dict(workflow)
+            self._in_memory_workflows[workflow.workflow_id] = workflow_data
+            return workflow_data
         
         try:
-            data = workflow.dict()
+            data = workflow_to_dict(workflow)
+            # Convert blocks and connections to JSON strings for Supabase
             data['blocks'] = json.dumps(data['blocks'])
             data['connections'] = json.dumps(data['connections'])
             
             result = self.client.table('workflows').insert(data).execute()
             logger.info(f"Saved workflow {workflow.workflow_id}")
-            return result.data[0] if result.data else data
+            
+            if result.data:
+                # Convert back from JSON strings for return
+                returned_data = result.data[0]
+                returned_data['blocks'] = json.loads(returned_data['blocks'])
+                returned_data['connections'] = json.loads(returned_data['connections'])
+                return returned_data
+            else:
+                # Return the original data if no result
+                data['blocks'] = json.loads(data['blocks'])
+                data['connections'] = json.loads(data['connections'])
+                return data
         except Exception as e:
             logger.error(f"Failed to save workflow: {str(e)}")
             raise
@@ -77,6 +111,8 @@ class DatabaseService:
         """Update an existing workflow"""
         if not self.client:
             if workflow_id in self._in_memory_workflows:
+                # Add updated_at timestamp
+                workflow_data['updated_at'] = datetime.utcnow().isoformat()
                 self._in_memory_workflows[workflow_id].update(workflow_data)
                 return self._in_memory_workflows[workflow_id]
             return None
@@ -84,6 +120,8 @@ class DatabaseService:
         try:
             # Prepare data for update
             update_data = workflow_data.copy()
+            update_data['updated_at'] = datetime.utcnow().isoformat()
+            
             if 'blocks' in update_data:
                 update_data['blocks'] = json.dumps(update_data['blocks'])
             if 'connections' in update_data:
@@ -91,11 +129,11 @@ class DatabaseService:
             
             result = self.client.table('workflows').update(update_data).eq('workflow_id', workflow_id).execute()
             if result.data:
-                workflow_data = result.data[0]
-                workflow_data['blocks'] = json.loads(workflow_data['blocks'])
-                workflow_data['connections'] = json.loads(workflow_data['connections'])
+                returned_data = result.data[0]
+                returned_data['blocks'] = json.loads(returned_data['blocks'])
+                returned_data['connections'] = json.loads(returned_data['connections'])
                 logger.info(f"Updated workflow {workflow_id}")
-                return workflow_data
+                return returned_data
             return None
         except Exception as e:
             logger.error(f"Failed to update workflow {workflow_id}: {str(e)}")

@@ -6,10 +6,14 @@ interface BlockComponentProps {
   block: BlockConfig
   onRemove: () => void
   onConfigure: () => void
-  onConnect: (targetId: string) => void
+  onConnect: () => void
+  onConnectionTarget: () => void
   onMouseDown?: (event: React.MouseEvent) => void
   connections: WorkflowConnection[]
   isDragging?: boolean
+  isConnecting?: boolean
+  isConnectionSource?: boolean
+  canBeTarget?: boolean
 }
 
 const BLOCK_COLORS: Record<BlockType, string> = {
@@ -33,11 +37,22 @@ export default function BlockComponent({
   onRemove,
   onConfigure,
   onConnect,
+  onConnectionTarget,
   onMouseDown,
   connections,
-  isDragging = false
+  isDragging = false,
+  isConnecting = false,
+  isConnectionSource = false,
+  canBeTarget = false
 }: BlockComponentProps) {
   const [isHovered, setIsHovered] = useState(false)
+
+  const handleClick = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    if (isConnecting && canBeTarget) {
+      onConnectionTarget()
+    }
+  }
 
 
 
@@ -64,9 +79,11 @@ export default function BlockComponent({
   return (
     <div
       className={`
-        relative bg-white rounded-lg shadow-md border-2 transition-all duration-200 cursor-move select-none
+        relative bg-white rounded-lg shadow-md border-2 transition-all duration-200 select-none
         ${isDragging ? 'border-blue-500 shadow-xl scale-105 z-50' : 'border-gray-200'}
         ${isHovered ? 'border-blue-300 shadow-lg' : ''}
+        ${isConnectionSource ? 'border-green-500 shadow-lg ring-2 ring-green-200' : ''}
+        ${canBeTarget ? 'border-orange-500 shadow-lg ring-2 ring-orange-200 cursor-pointer' : 'cursor-move'}
         hover:shadow-lg
       `}
       style={{ 
@@ -76,7 +93,8 @@ export default function BlockComponent({
       }}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
-      onMouseDown={onMouseDown}
+      onMouseDown={!isConnecting ? onMouseDown : undefined}
+      onClick={handleClick}
     >
       {/* Block Header */}
       <div className={`${BLOCK_COLORS[block.block_type]} text-white p-3 rounded-t-lg`}>
@@ -109,8 +127,19 @@ export default function BlockComponent({
       </div>
 
       {/* Action Buttons (shown on hover) */}
-      {isHovered && (
+      {isHovered && !isConnecting && (
         <div className="absolute -top-2 -right-2 flex space-x-1">
+          <button
+            onClick={(e) => {
+              e.stopPropagation()
+              onConnect()
+            }}
+            className="bg-green-500 hover:bg-green-600 text-white p-1 rounded-full shadow-lg transition-colors"
+            title="Connect to another block"
+          >
+            <LinkIcon className="w-4 h-4" />
+          </button>
+          
           <button
             onClick={(e) => {
               e.stopPropagation()
@@ -135,13 +164,58 @@ export default function BlockComponent({
         </div>
       )}
 
+      {/* Connection Status Indicator */}
+      {isConnectionSource && (
+        <div className="absolute -top-3 left-1/2 transform -translate-x-1/2">
+          <div className="bg-green-500 text-white text-xs px-2 py-1 rounded-full">
+            Click target block
+          </div>
+        </div>
+      )}
+
+      {canBeTarget && (
+        <div className="absolute -top-3 left-1/2 transform -translate-x-1/2">
+          <div className="bg-orange-500 text-white text-xs px-2 py-1 rounded-full animate-pulse">
+            Click to connect
+          </div>
+        </div>
+      )}
+
       {/* Connection Points */}
-      <div className="absolute -left-2 top-1/2 transform -translate-y-1/2">
-        <div className="w-4 h-4 bg-gray-300 rounded-full border-2 border-white shadow-sm" />
+      <div 
+        className="absolute -left-2 top-1/2 transform -translate-y-1/2 cursor-pointer"
+        onClick={(e) => {
+          e.stopPropagation()
+          if (isConnecting && canBeTarget) {
+            onConnectionTarget()
+          } else if (!isConnecting) {
+            onConnect()
+          }
+        }}
+      >
+        <div className={`
+          w-4 h-4 rounded-full border-2 border-white shadow-sm transition-all
+          ${isConnecting && canBeTarget ? 'bg-orange-400 animate-pulse' : 'bg-gray-300 hover:bg-blue-400'}
+          ${isConnectionSource ? 'bg-green-400' : ''}
+        `} />
       </div>
       
-      <div className="absolute -right-2 top-1/2 transform -translate-y-1/2">
-        <div className="w-4 h-4 bg-gray-300 rounded-full border-2 border-white shadow-sm" />
+      <div 
+        className="absolute -right-2 top-1/2 transform -translate-y-1/2 cursor-pointer"
+        onClick={(e) => {
+          e.stopPropagation()
+          if (isConnecting && canBeTarget) {
+            onConnectionTarget()
+          } else if (!isConnecting) {
+            onConnect()
+          }
+        }}
+      >
+        <div className={`
+          w-4 h-4 rounded-full border-2 border-white shadow-sm transition-all
+          ${isConnecting && canBeTarget ? 'bg-orange-400 animate-pulse' : 'bg-gray-300 hover:bg-blue-400'}
+          ${isConnectionSource ? 'bg-green-400' : ''}
+        `} />
       </div>
 
       {/* Status Indicators */}
