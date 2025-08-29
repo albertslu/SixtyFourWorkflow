@@ -18,14 +18,14 @@ export default function Home() {
         <link rel="icon" href="/favicon.ico" />
       </Head>
 
-      <div className="min-h-screen bg-gray-50">
+      <div className="h-screen bg-gray-50 flex flex-col overflow-hidden">
         {/* Header */}
-        <header className="bg-white shadow-sm border-b border-gray-200">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="flex justify-between items-center h-16">
+        <header className="bg-white shadow-sm border-b border-gray-200 flex-shrink-0">
+          <div className="px-4 sm:px-6 lg:px-8">
+            <div className="flex justify-between items-center h-14">
               <div className="flex items-center">
                 <div className="flex-shrink-0">
-                  <h1 className="text-2xl font-bold text-gray-900">
+                  <h1 className="text-xl font-bold text-gray-900">
                     SixtyFour Workflow Engine
                   </h1>
                 </div>
@@ -35,7 +35,7 @@ export default function Home() {
                 <div className="flex bg-gray-100 rounded-lg p-1">
                   <button
                     onClick={() => setActiveTab('builder')}
-                    className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
+                    className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
                       activeTab === 'builder'
                         ? 'bg-white text-gray-900 shadow-sm'
                         : 'text-gray-600 hover:text-gray-900'
@@ -46,7 +46,7 @@ export default function Home() {
                   </button>
                   <button
                     onClick={() => setActiveTab('jobs')}
-                    className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
+                    className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
                       activeTab === 'jobs'
                         ? 'bg-white text-gray-900 shadow-sm'
                         : 'text-gray-600 hover:text-gray-900'
@@ -57,7 +57,7 @@ export default function Home() {
                   </button>
                   <button
                     onClick={() => setActiveTab('results')}
-                    className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
+                    className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
                       activeTab === 'results'
                         ? 'bg-white text-gray-900 shadow-sm'
                         : 'text-gray-600 hover:text-gray-900'
@@ -73,20 +73,24 @@ export default function Home() {
         </header>
 
         {/* Main Content */}
-        <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <main className="flex-1 overflow-hidden">
           {activeTab === 'builder' && (
             <WorkflowBuilder onJobCreated={setCurrentJobId} />
           )}
           
           {activeTab === 'jobs' && (
-            <JobMonitor 
-              currentJobId={currentJobId}
-              onJobSelect={setCurrentJobId}
-            />
+            <div className="h-full p-4">
+              <JobMonitor 
+                currentJobId={currentJobId}
+                onJobSelect={setCurrentJobId}
+              />
+            </div>
           )}
           
           {activeTab === 'results' && (
-            <ResultsPanel jobId={currentJobId} />
+            <div className="h-full p-4">
+              <ResultsPanel jobId={currentJobId} />
+            </div>
           )}
         </main>
       </div>

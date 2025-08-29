@@ -183,8 +183,14 @@ async def update_workflow(workflow_id: str, request: UpdateWorkflowRequest):
             connections=connections
         )
         
-        # Save updated workflow
-        updated_workflow = await db_service.save_workflow(workflow)
+        # Update workflow in database
+        update_data = {
+            'name': existing['name'],
+            'description': existing['description'],
+            'blocks': existing['blocks'],
+            'connections': existing['connections']
+        }
+        updated_workflow = await db_service.update_workflow(workflow_id, update_data)
         
         logger.info(f"Updated workflow {workflow_id}")
         return updated_workflow

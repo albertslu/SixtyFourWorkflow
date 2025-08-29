@@ -7,7 +7,9 @@ interface BlockComponentProps {
   onRemove: () => void
   onConfigure: () => void
   onConnect: (targetId: string) => void
+  onMouseDown?: (event: React.MouseEvent) => void
   connections: WorkflowConnection[]
+  isDragging?: boolean
 }
 
 const BLOCK_COLORS: Record<BlockType, string> = {
@@ -31,19 +33,13 @@ export default function BlockComponent({
   onRemove,
   onConfigure,
   onConnect,
-  connections
+  onMouseDown,
+  connections,
+  isDragging = false
 }: BlockComponentProps) {
   const [isHovered, setIsHovered] = useState(false)
-  const [isDragging, setIsDragging] = useState(false)
 
-  const handleDragStart = (e: React.DragEvent) => {
-    setIsDragging(true)
-    e.dataTransfer.setData('text/plain', block.block_id)
-  }
 
-  const handleDragEnd = () => {
-    setIsDragging(false)
-  }
 
   const getParameterSummary = () => {
     switch (block.block_type) {
@@ -68,16 +64,19 @@ export default function BlockComponent({
   return (
     <div
       className={`
-        relative bg-white rounded-lg shadow-md border-2 transition-all duration-200 cursor-move
-        ${isDragging ? 'border-primary-500 shadow-lg scale-105' : 'border-gray-200'}
-        ${isHovered ? 'border-primary-300 shadow-lg' : ''}
+        relative bg-white rounded-lg shadow-md border-2 transition-all duration-200 cursor-move select-none
+        ${isDragging ? 'border-blue-500 shadow-xl scale-105 z-50' : 'border-gray-200'}
+        ${isHovered ? 'border-blue-300 shadow-lg' : ''}
+        hover:shadow-lg
       `}
-      style={{ width: '200px', minHeight: '120px' }}
-      draggable
-      onDragStart={handleDragStart}
-      onDragEnd={handleDragEnd}
+      style={{ 
+        width: '200px', 
+        minHeight: '120px',
+        userSelect: 'none'
+      }}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
+      onMouseDown={onMouseDown}
     >
       {/* Block Header */}
       <div className={`${BLOCK_COLORS[block.block_type]} text-white p-3 rounded-t-lg`}>

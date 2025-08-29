@@ -152,7 +152,7 @@ export default function BlockParametersModal({
               <h4 className="text-sm font-medium text-gray-700 mb-2">Examples:</h4>
               <div className="text-xs text-gray-600 space-y-1">
                 <div>• df['company'].str.contains('Ariglad', na=False)</div>
-                <div>• df['name'].str.len() > 5</div>
+                <div>• df['name'].str.len() &gt; 5</div>
                 <div>• df['email'].notna()</div>
               </div>
             </div>

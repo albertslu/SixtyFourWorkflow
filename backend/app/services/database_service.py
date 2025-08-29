@@ -73,6 +73,34 @@ class DatabaseService:
             logger.error(f"Failed to get workflow {workflow_id}: {str(e)}")
             return None
     
+    async def update_workflow(self, workflow_id: str, workflow_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """Update an existing workflow"""
+        if not self.client:
+            if workflow_id in self._in_memory_workflows:
+                self._in_memory_workflows[workflow_id].update(workflow_data)
+                return self._in_memory_workflows[workflow_id]
+            return None
+        
+        try:
+            # Prepare data for update
+            update_data = workflow_data.copy()
+            if 'blocks' in update_data:
+                update_data['blocks'] = json.dumps(update_data['blocks'])
+            if 'connections' in update_data:
+                update_data['connections'] = json.dumps(update_data['connections'])
+            
+            result = self.client.table('workflows').update(update_data).eq('workflow_id', workflow_id).execute()
+            if result.data:
+                workflow_data = result.data[0]
+                workflow_data['blocks'] = json.loads(workflow_data['blocks'])
+                workflow_data['connections'] = json.loads(workflow_data['connections'])
+                logger.info(f"Updated workflow {workflow_id}")
+                return workflow_data
+            return None
+        except Exception as e:
+            logger.error(f"Failed to update workflow {workflow_id}: {str(e)}")
+            raise
+
     async def list_workflows(self) -> List[Dict[str, Any]]:
         """List all workflows"""
         if not self.client:

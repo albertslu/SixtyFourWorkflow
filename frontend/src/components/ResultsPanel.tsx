@@ -185,11 +185,11 @@ export default function ResultsPanel({ jobId }: ResultsPanelProps) {
                 <div>
                   <div className="font-medium text-gray-900">Final Output</div>
                   <div className="text-sm text-gray-500 font-mono">
-                    {jobResults.final_output_path.split('/').pop()}
+                    {jobResults.final_output_path?.split('/').pop()}
                   </div>
                 </div>
                 <button
-                  onClick={() => handleDownloadResult(jobResults.final_output_path.split('/').pop())}
+                  onClick={() => jobResults.final_output_path && handleDownloadResult(jobResults.final_output_path.split('/').pop() || '')}
                   className="p-2 text-gray-400 hover:text-gray-600"
                   title="Download file"
                 >
