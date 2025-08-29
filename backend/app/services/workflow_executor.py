@@ -244,6 +244,9 @@ class WorkflowExecutor:
         
         # Handle relative paths
         if not os.path.isabs(file_path):
+            # Remove leading ./ if present
+            if file_path.startswith('./'):
+                file_path = file_path[2:]
             file_path = os.path.join(settings.upload_folder, file_path)
         
         if not os.path.exists(file_path):
@@ -300,6 +303,9 @@ class WorkflowExecutor:
         
         # Handle relative paths
         if not os.path.isabs(file_path):
+            # Remove leading ./ if present
+            if file_path.startswith('./'):
+                file_path = file_path[2:]
             file_path = os.path.join(settings.upload_folder, file_path)
         
         # Ensure directory exists

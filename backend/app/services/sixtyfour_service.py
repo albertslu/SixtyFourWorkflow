@@ -29,19 +29,27 @@ class SixtyfourService:
             "x-api-key": self.api_key,
             "Content-Type": "application/json"
         }
+        
+        # Add organization ID if provided
+        if self.org_id:
+            self.headers["x-org-id"] = self.org_id
     
     async def _make_request(self, endpoint: str, data: Dict[str, Any]) -> Dict[str, Any]:
         """Make an async HTTP request to Sixtyfour API"""
         url = f"{self.base_url}/{endpoint.lstrip('/')}"
         
-        async with httpx.AsyncClient(timeout=30.0) as client:
+        # Increase timeout for API calls that may take longer
+        timeout = httpx.Timeout(60.0, connect=10.0)
+        async with httpx.AsyncClient(timeout=timeout) as client:
             try:
-                logger.info(f"Making request to {url}")
+                logger.info(f"Making request to {url} with data: {data}")
                 response = await client.post(url, headers=self.headers, json=data)
+                
+                logger.info(f"Response status: {response.status_code}")
                 
                 if response.status_code == 200:
                     result = response.json()
-                    logger.info(f"Successful response from {endpoint}")
+                    logger.info(f"Successful response from {endpoint}: {result}")
                     return result
                 else:
                     error_msg = f"API request failed: {response.status_code} - {response.text}"
@@ -70,16 +78,17 @@ class SixtyfourService:
         """
         if struct is None:
             struct = {
-                "name": "Full name",
-                "email": "Email address", 
-                "company": "Company name",
-                "title": "Job title",
-                "linkedin": "LinkedIn URL",
-                "website": "Company website",
-                "location": "Location",
-                "industry": "Industry",
-                "phone": "Phone number",
-                "education": "Educational background including university"
+                "name": "The individual's full name",
+                "email": "The individual's email address",
+                "phone": "The individual's phone number",
+                "company": "The company the individual is associated with",
+                "title": "The individual's job title",
+                "linkedin": "LinkedIn URL for the person",
+                "website": "Company website URL",
+                "location": "The individual's location and/or company location",
+                "industry": "Industry the person operates in",
+                "github_url": "URL for their GitHub profile",
+                "github_notes": "Take detailed notes on their GitHub profile."
             }
         
         data = {
@@ -90,26 +99,100 @@ class SixtyfourService:
         logger.info(f"Enriching lead: {lead_info.get('name', 'Unknown')}")
         return await self._make_request("enrich-lead", data)
     
-    async def find_email(self, person_info: Dict[str, Any]) -> Dict[str, Any]:
+    async def enrich_lead_async(self, lead_info: Dict[str, Any], struct: Optional[Dict[str, str]] = None) -> Dict[str, Any]:
+        """
+        Start an async lead enrichment job using Sixtyfour API
+        
+        Args:
+            lead_info: Dictionary containing lead information (name, email, company, etc.)
+            struct: Optional dictionary defining the structure of data to return
+            
+        Returns:
+            Dictionary containing task_id and status for async job tracking
+        """
+        if struct is None:
+            struct = {
+                "name": "The individual's full name",
+                "email": "The individual's email address",
+                "phone": "The individual's phone number",
+                "company": "The company the individual is associated with",
+                "title": "The individual's job title",
+                "linkedin": "LinkedIn URL for the person",
+                "website": "Company website URL",
+                "location": "The individual's location and/or company location",
+                "industry": "Industry the person operates in",
+                "github_url": "URL for their GitHub profile",
+                "github_notes": "Take detailed notes on their GitHub profile."
+            }
+        
+        data = {
+            "lead_info": lead_info,
+            "struct": struct
+        }
+        
+        logger.info(f"Starting async enrichment for lead: {lead_info.get('name', 'Unknown')}")
+        return await self._make_request("enrich-lead-async", data)
+    
+    async def get_job_status(self, task_id: str) -> Dict[str, Any]:
+        """
+        Check the status of an async job
+        
+        Args:
+            task_id: The task ID returned from async endpoint
+            
+        Returns:
+            Dictionary containing job status and results (if completed)
+        """
+        url = f"{self.base_url}/job-status/{task_id}"
+        
+        timeout = httpx.Timeout(30.0, connect=10.0)
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            try:
+                logger.info(f"Checking job status for task: {task_id}")
+                response = await client.get(url, headers=self.headers)
+                
+                logger.info(f"Response status: {response.status_code}")
+                
+                if response.status_code == 200:
+                    result = response.json()
+                    logger.info(f"Job status response: {result}")
+                    return result
+                else:
+                    error_msg = f"Job status request failed: {response.status_code} - {response.text}"
+                    logger.error(error_msg)
+                    raise SixtyfourAPIError(error_msg)
+                    
+            except httpx.TimeoutException:
+                error_msg = f"Request to job-status/{task_id} timed out"
+                logger.error(error_msg)
+                raise SixtyfourAPIError(error_msg)
+            except httpx.RequestError as e:
+                error_msg = f"Request error: {str(e)}"
+                logger.error(error_msg)
+                raise SixtyfourAPIError(error_msg)
+    
+    async def find_email(self, person_info: Dict[str, Any], bruteforce: bool = None, only_company_emails: bool = None) -> Dict[str, Any]:
         """
         Find email address for a person using Sixtyfour API
         
         Args:
             person_info: Dictionary containing person information (name, company, etc.)
+            bruteforce: Optional - Whether to use brute force to find the email
+            only_company_emails: Optional - When True, only return company email addresses
             
         Returns:
             Dictionary containing found email information
         """
-        # Note: The exact endpoint structure for find-email may need adjustment
-        # based on actual Sixtyfour API documentation
+        # Start with the basic required format
         data = {
-            "person_info": person_info,
-            "struct": {
-                "email": "Primary email address",
-                "confidence": "Confidence score for the email",
-                "source": "Source of the email information"
-            }
+            "lead": person_info
         }
+        
+        # Add optional parameters only if specified
+        if bruteforce is not None:
+            data["bruteforce"] = bruteforce
+        if only_company_emails is not None:
+            data["only_company_emails"] = only_company_emails
         
         logger.info(f"Finding email for: {person_info.get('name', 'Unknown')}")
         return await self._make_request("find-email", data)
@@ -145,10 +228,25 @@ class SixtyfourService:
                     "_enrichment_status": "failed"
                 })
             else:
-                enriched_leads.append({
-                    **result,
-                    "_enrichment_status": "success"
-                })
+                # Extract structured_data from the API response and merge with original lead
+                enriched_lead = {**leads[i]}
+                
+                if "structured_data" in result:
+                    # Merge the structured data from the API response
+                    enriched_lead.update(result["structured_data"])
+                
+                # Add additional metadata from the API response
+                if "notes" in result:
+                    enriched_lead["_enrichment_notes"] = result["notes"]
+                if "confidence_score" in result:
+                    enriched_lead["_confidence_score"] = result["confidence_score"]
+                if "findings" in result:
+                    enriched_lead["_findings"] = result["findings"]
+                if "references" in result:
+                    enriched_lead["_references"] = result["references"]
+                
+                enriched_lead["_enrichment_status"] = "success"
+                enriched_leads.append(enriched_lead)
         
         logger.info(f"Completed batch enrichment: {len([r for r in enriched_leads if r.get('_enrichment_status') == 'success'])} successful")
         return enriched_leads
@@ -178,10 +276,33 @@ class SixtyfourService:
                     "_email_find_status": "failed"
                 })
             else:
-                email_results.append({
-                    **result,
-                    "_email_find_status": "success"
-                })
+                # Process find-email API response
+                email_result = {**persons[i]}
+                
+                if isinstance(result, dict):
+                    # Handle the email field which is an array of tuples: [email, status, type]
+                    if "email" in result and result["email"]:
+                        emails = result["email"]
+                        if emails and len(emails) > 0:
+                            # Get the first email (primary email)
+                            primary_email = emails[0]
+                            if len(primary_email) >= 3:
+                                email_result["email"] = primary_email[0]  # Email address
+                                email_result["_email_status"] = primary_email[1]  # OK/UNKNOWN
+                                email_result["_email_type"] = primary_email[2]  # COMPANY/PERSONAL
+                            
+                            # Store all found emails for reference
+                            email_result["_all_emails"] = emails
+                    
+                    # Copy other fields from the response (name, company, title, etc.)
+                    for key, value in result.items():
+                        if key not in ["email"] and not key.startswith("_"):
+                            # Only update if the field wasn't already in the original data
+                            if key not in email_result:
+                                email_result[key] = value
+                
+                email_result["_email_find_status"] = "success"
+                email_results.append(email_result)
         
         logger.info(f"Completed batch email finding: {len([r for r in email_results if r.get('_email_find_status') == 'success'])} successful")
         return email_results

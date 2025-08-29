@@ -24,7 +24,7 @@ class Settings(BaseSettings):
     sixtyfour_base_url: str = os.getenv("SIXTYFOUR_BASE_URL", "https://api.sixtyfour.ai")
     
     # File Storage Configuration
-    upload_folder: str = os.getenv("UPLOAD_FOLDER", "./uploads")
+    upload_folder: str = os.getenv("UPLOAD_FOLDER", str(Path(__file__).parent.parent.parent.parent / "uploads"))
     max_file_size: int = int(os.getenv("MAX_FILE_SIZE", 10485760))  # 10MB
     
     # Redis Configuration (for job queue)

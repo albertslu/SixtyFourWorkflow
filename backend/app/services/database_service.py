@@ -32,6 +32,23 @@ def workflow_to_dict(workflow: Workflow) -> Dict[str, Any]:
     return data
 
 
+def job_to_dict(job: Job) -> Dict[str, Any]:
+    """Convert job to dictionary with proper datetime handling"""
+    data = {
+        'job_id': job.job_id,
+        'workflow_id': job.workflow_id,
+        'status': job.status.value if hasattr(job.status, 'value') else job.status,
+        'progress': job.progress.dict() if hasattr(job.progress, 'dict') else job.progress,
+        'results': [result.dict() if hasattr(result, 'dict') else result for result in job.results],
+        'created_at': job.created_at.isoformat() if job.created_at else datetime.utcnow().isoformat(),
+        'started_at': job.started_at.isoformat() if job.started_at else None,
+        'completed_at': job.completed_at.isoformat() if job.completed_at else None,
+        'error_message': job.error_message,
+        'final_output_path': job.final_output_path
+    }
+    return data
+
+
 class DatabaseService:
     """Service for database operations using Supabase"""
     
@@ -160,11 +177,13 @@ class DatabaseService:
     async def save_job(self, job: Job) -> Dict[str, Any]:
         """Save a job to the database"""
         if not self.client:
-            self._in_memory_jobs[job.job_id] = job.dict()
-            return job.dict()
+            job_data = job_to_dict(job)
+            self._in_memory_jobs[job.job_id] = job_data
+            return job_data
         
         try:
-            data = job.dict()
+            data = job_to_dict(job)
+            # Convert progress and results to JSON strings for Supabase
             data['progress'] = json.dumps(data['progress'])
             data['results'] = json.dumps(data['results'])
             
@@ -179,7 +198,18 @@ class DatabaseService:
                 result = self.client.table('jobs').insert(data).execute()
             
             logger.info(f"Saved job {job.job_id}")
-            return result.data[0] if result.data else data
+            
+            if result.data:
+                # Convert back from JSON strings for return
+                returned_data = result.data[0]
+                returned_data['progress'] = json.loads(returned_data['progress'])
+                returned_data['results'] = json.loads(returned_data['results'])
+                return returned_data
+            else:
+                # Return the original data if no result
+                data['progress'] = json.loads(data['progress'])
+                data['results'] = json.loads(data['results'])
+                return data
         except Exception as e:
             logger.error(f"Failed to save job: {str(e)}")
             raise
@@ -215,7 +245,7 @@ class DatabaseService:
             return
         
         try:
-            update_data = {'status': status}
+            update_data = {'status': status.value if hasattr(status, 'value') else status}
             if error_message:
                 update_data['error_message'] = error_message
             if status == JobStatus.RUNNING:
@@ -236,9 +266,10 @@ class DatabaseService:
             return
         
         try:
-            update_data = {'progress': json.dumps(progress.dict())}
+            progress_data = progress.dict() if hasattr(progress, 'dict') else progress
+            update_data = {'progress': json.dumps(progress_data)}
             self.client.table('jobs').update(update_data).eq('job_id', job_id).execute()
-            logger.debug(f"Updated job {job_id} progress: {progress.percentage}%")
+            logger.debug(f"Updated job {job_id} progress: {progress_data.get('percentage', 0)}%")
         except Exception as e:
             logger.error(f"Failed to update job progress: {str(e)}")
     
@@ -256,7 +287,8 @@ class DatabaseService:
             job_data = await self.get_job(job_id)
             if job_data:
                 results = job_data.get('results', [])
-                results.append(result.dict())
+                result_data = result.dict() if hasattr(result, 'dict') else result
+                results.append(result_data)
                 
                 update_data = {'results': json.dumps(results)}
                 self.client.table('jobs').update(update_data).eq('job_id', job_id).execute()
