@@ -39,7 +39,8 @@ class SixtyfourService:
         url = f"{self.base_url}/{endpoint.lstrip('/')}"
         
         # Increase timeout for API calls that may take longer
-        timeout = httpx.Timeout(60.0, connect=10.0)
+        # Enrich-lead can take 2-3 minutes per request
+        timeout = httpx.Timeout(180.0, connect=15.0)
         async with httpx.AsyncClient(timeout=timeout) as client:
             try:
                 logger.info(f"Making request to {url} with data: {data}")

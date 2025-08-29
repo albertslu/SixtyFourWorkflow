@@ -151,7 +151,7 @@ export default function BlockParametersModal({
             <div className="bg-gray-50 p-3 rounded-md">
               <h4 className="text-sm font-medium text-gray-700 mb-2">Examples:</h4>
               <div className="text-xs text-gray-600 space-y-1">
-                <div>• df['company'].str.contains('Ariglad', na=False)</div>
+                <div>• df['company'].str.contains('Ariglad Inc', na=False)</div>
                 <div>• df['name'].str.len() &gt; 5</div>
                 <div>• df['email'].notna()</div>
               </div>
@@ -170,6 +170,25 @@ export default function BlockParametersModal({
               <p className="text-xs text-gray-500 mt-1">
                 Define what fields to enrich and their descriptions
               </p>
+              
+              <div className="bg-gray-50 p-3 rounded-md mt-2">
+                <h4 className="text-sm font-medium text-gray-700 mb-2">Default Structure:</h4>
+                <pre className="text-xs text-gray-600 whitespace-pre-wrap">
+{`{
+  "name": "The individual's full name",
+  "email": "The individual's email address", 
+  "phone": "The individual's phone number",
+  "company": "The company the individual is associated with",
+  "title": "The individual's job title",
+  "linkedin": "LinkedIn URL for the person",
+  "website": "Company website URL",
+  "location": "The individual's location and/or company location",
+  "industry": "Industry the person operates in",
+  "github_url": "URL for their GitHub profile",
+  "github_notes": "Take detailed notes on their GitHub profile."
+}`}
+                </pre>
+              </div>
             </div>
             
             <div>
@@ -178,17 +197,7 @@ export default function BlockParametersModal({
               </label>
               {renderParameterInput('batch_size', parameters.batch_size, 'number')}
               <p className="text-xs text-gray-500 mt-1">
-                Number of leads to process concurrently
-              </p>
-            </div>
-            
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Timeout (seconds)
-              </label>
-              {renderParameterInput('timeout', parameters.timeout, 'number')}
-              <p className="text-xs text-gray-500 mt-1">
-                Timeout per API request
+                Number of leads to process concurrently (default: 10)
               </p>
             </div>
           </div>
@@ -209,11 +218,21 @@ export default function BlockParametersModal({
             
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Timeout (seconds)
+                Brute Force Search
               </label>
-              {renderParameterInput('timeout', parameters.timeout, 'number')}
+              {renderParameterInput('bruteforce', parameters.bruteforce, 'boolean')}
               <p className="text-xs text-gray-500 mt-1">
-                Timeout per API request
+                Use brute force to find emails (default: true)
+              </p>
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Company Emails Only
+              </label>
+              {renderParameterInput('only_company_emails', parameters.only_company_emails, 'boolean')}
+              <p className="text-xs text-gray-500 mt-1">
+                Only return company email addresses (default: false)
               </p>
             </div>
           </div>

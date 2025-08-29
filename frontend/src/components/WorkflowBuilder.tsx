@@ -621,25 +621,30 @@ function getDefaultParameters(blockType: BlockType): Record<string, any> {
       }
     case 'filter':
       return {
-        condition: "df['company'].str.contains('Ariglad', na=False)"
+        condition: "df['company'].str.contains('Ariglad Inc', na=False)"
       }
     case 'enrich_lead':
       return {
         struct: {
-          name: 'Full name',
-          email: 'Email address',
-          company: 'Company name',
-          title: 'Job title',
-          linkedin: 'LinkedIn URL',
-          education: 'Educational background including university'
+          "name": "The individual's full name",
+          "email": "The individual's email address",
+          "phone": "The individual's phone number",
+          "company": "The company the individual is associated with",
+          "title": "The individual's job title",
+          "linkedin": "LinkedIn URL for the person",
+          "website": "Company website URL",
+          "location": "The individual's location and/or company location",
+          "industry": "Industry the person operates in",
+          "github_url": "URL for their GitHub profile",
+          "github_notes": "Take detailed notes on their GitHub profile."
         },
-        batch_size: 10,
-        timeout: 30
+        batch_size: 10
       }
     case 'find_email':
       return {
         batch_size: 10,
-        timeout: 30
+        bruteforce: true,
+        only_company_emails: false
       }
     default:
       return {}
