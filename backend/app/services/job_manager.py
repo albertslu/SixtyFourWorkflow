@@ -161,7 +161,20 @@ class JobManager:
         Returns:
             True if job was cancelled, False if not found or already completed
         """
-        # Check if job is running
+        # First check the database to see if job exists and is cancellable
+        job_data = await db_service.get_job(job_id)
+        if not job_data:
+            logger.warning(f"Job {job_id} not found in database")
+            return False
+        
+        job_status = JobStatus(job_data['status'])
+        
+        # Can only cancel pending or running jobs
+        if job_status not in [JobStatus.PENDING, JobStatus.RUNNING]:
+            logger.warning(f"Job {job_id} cannot be cancelled (status: {job_status})")
+            return False
+        
+        # Check if job is actively running in job manager
         if job_id in self.running_jobs:
             task = self.running_jobs[job_id]
             task.cancel()
@@ -171,25 +184,21 @@ class JobManager:
             except asyncio.CancelledError:
                 pass
             
-            # Update job status
-            await db_service.update_job_status(job_id, JobStatus.CANCELLED)
-            
             # Clean up
             if job_id in self.running_jobs:
                 del self.running_jobs[job_id]
             
-            logger.info(f"Cancelled job {job_id}")
-            return True
+            logger.info(f"Cancelled active job {job_id}")
+        else:
+            # Job is in database as running/pending but not in job manager
+            # This can happen after server restart or if job got stuck
+            logger.info(f"Job {job_id} found in database but not in job manager - marking as cancelled")
         
-        # Check if job is pending in queue (this is more complex to implement)
-        # For now, just update status if job exists
-        job_data = await db_service.get_job(job_id)
-        if job_data and job_data['status'] == JobStatus.PENDING:
-            await db_service.update_job_status(job_id, JobStatus.CANCELLED)
-            logger.info(f"Cancelled pending job {job_id}")
-            return True
+        # Update job status in database
+        await db_service.update_job_status(job_id, JobStatus.CANCELLED, "Job cancelled by user")
+        logger.info(f"Marked job {job_id} as cancelled in database")
         
-        return False
+        return True
     
     async def list_jobs(self, workflow_id: Optional[str] = None, status: Optional[JobStatus] = None) -> List[Dict[str, Any]]:
         """
