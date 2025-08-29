@@ -1,0 +1,9 @@
+name,email,company,title,linkedin_url
+John Smith,john.smith@email.com,Ariglad Inc,Software Engineer,https://linkedin.com/in/johnsmith
+Jane Doe,jane.doe@techcorp.com,TechCorp,Product Manager,https://linkedin.com/in/janedoe
+Mike Johnson,mike.j@startup.io,StartupIO,CTO,https://linkedin.com/in/mikejohnson
+Sarah Wilson,sarah.wilson@bigco.com,BigCo,Data Scientist,https://linkedin.com/in/sarahwilson
+David Brown,david.brown@ariglad.com,Ariglad Inc,Marketing Director,https://linkedin.com/in/davidbrown
+Lisa Chen,lisa.chen@innovate.com,InnovateCorp,UX Designer,https://linkedin.com/in/lisachen
+Tom Anderson,tom.anderson@email.com,FreelanceCorp,Consultant,https://linkedin.com/in/tomanderson
+Emily Davis,emily.davis@ariglad.com,Ariglad Inc,HR Manager,https://linkedin.com/in/emilydavis

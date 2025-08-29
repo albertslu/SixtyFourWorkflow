@@ -1,0 +1,227 @@
+"""
+Database service for Supabase integration
+"""
+from typing import Dict, Any, List, Optional
+from supabase import create_client, Client
+from loguru import logger
+import json
+from datetime import datetime
+
+from core.config import settings
+from models.workflow import Job, Workflow, JobStatus, JobProgress, JobResult
+
+
+class DatabaseService:
+    """Service for database operations using Supabase"""
+    
+    def __init__(self):
+        if not settings.supabase_url or not settings.supabase_key:
+            logger.warning("Supabase credentials not found, using in-memory storage")
+            self.client = None
+            self._in_memory_jobs = {}
+            self._in_memory_workflows = {}
+        else:
+            self.client: Client = create_client(
+                settings.supabase_url,
+                settings.supabase_key
+            )
+            logger.info("Connected to Supabase database")
+    
+    async def create_tables(self):
+        """Create necessary tables if they don't exist"""
+        if not self.client:
+            logger.info("Using in-memory storage, skipping table creation")
+            return
+            
+        # Note: In a real implementation, you'd create these tables via Supabase dashboard
+        # or migration scripts. This is just for reference.
+        logger.info("Tables should be created via Supabase dashboard")
+    
+    # Workflow operations
+    async def save_workflow(self, workflow: Workflow) -> Dict[str, Any]:
+        """Save a workflow to the database"""
+        if not self.client:
+            self._in_memory_workflows[workflow.workflow_id] = workflow.dict()
+            return workflow.dict()
+        
+        try:
+            data = workflow.dict()
+            data['blocks'] = json.dumps(data['blocks'])
+            data['connections'] = json.dumps(data['connections'])
+            
+            result = self.client.table('workflows').insert(data).execute()
+            logger.info(f"Saved workflow {workflow.workflow_id}")
+            return result.data[0] if result.data else data
+        except Exception as e:
+            logger.error(f"Failed to save workflow: {str(e)}")
+            raise
+    
+    async def get_workflow(self, workflow_id: str) -> Optional[Dict[str, Any]]:
+        """Get a workflow by ID"""
+        if not self.client:
+            return self._in_memory_workflows.get(workflow_id)
+        
+        try:
+            result = self.client.table('workflows').select('*').eq('workflow_id', workflow_id).execute()
+            if result.data:
+                workflow_data = result.data[0]
+                workflow_data['blocks'] = json.loads(workflow_data['blocks'])
+                workflow_data['connections'] = json.loads(workflow_data['connections'])
+                return workflow_data
+            return None
+        except Exception as e:
+            logger.error(f"Failed to get workflow {workflow_id}: {str(e)}")
+            return None
+    
+    async def list_workflows(self) -> List[Dict[str, Any]]:
+        """List all workflows"""
+        if not self.client:
+            return list(self._in_memory_workflows.values())
+        
+        try:
+            result = self.client.table('workflows').select('*').execute()
+            workflows = []
+            for workflow_data in result.data:
+                workflow_data['blocks'] = json.loads(workflow_data['blocks'])
+                workflow_data['connections'] = json.loads(workflow_data['connections'])
+                workflows.append(workflow_data)
+            return workflows
+        except Exception as e:
+            logger.error(f"Failed to list workflows: {str(e)}")
+            return []
+    
+    # Job operations
+    async def save_job(self, job: Job) -> Dict[str, Any]:
+        """Save a job to the database"""
+        if not self.client:
+            self._in_memory_jobs[job.job_id] = job.dict()
+            return job.dict()
+        
+        try:
+            data = job.dict()
+            data['progress'] = json.dumps(data['progress'])
+            data['results'] = json.dumps(data['results'])
+            
+            # Check if job exists
+            existing = self.client.table('jobs').select('job_id').eq('job_id', job.job_id).execute()
+            
+            if existing.data:
+                # Update existing job
+                result = self.client.table('jobs').update(data).eq('job_id', job.job_id).execute()
+            else:
+                # Insert new job
+                result = self.client.table('jobs').insert(data).execute()
+            
+            logger.info(f"Saved job {job.job_id}")
+            return result.data[0] if result.data else data
+        except Exception as e:
+            logger.error(f"Failed to save job: {str(e)}")
+            raise
+    
+    async def get_job(self, job_id: str) -> Optional[Dict[str, Any]]:
+        """Get a job by ID"""
+        if not self.client:
+            return self._in_memory_jobs.get(job_id)
+        
+        try:
+            result = self.client.table('jobs').select('*').eq('job_id', job_id).execute()
+            if result.data:
+                job_data = result.data[0]
+                job_data['progress'] = json.loads(job_data['progress'])
+                job_data['results'] = json.loads(job_data['results'])
+                return job_data
+            return None
+        except Exception as e:
+            logger.error(f"Failed to get job {job_id}: {str(e)}")
+            return None
+    
+    async def update_job_status(self, job_id: str, status: JobStatus, error_message: Optional[str] = None):
+        """Update job status"""
+        if not self.client:
+            if job_id in self._in_memory_jobs:
+                self._in_memory_jobs[job_id]['status'] = status
+                if error_message:
+                    self._in_memory_jobs[job_id]['error_message'] = error_message
+                if status == JobStatus.RUNNING:
+                    self._in_memory_jobs[job_id]['started_at'] = datetime.utcnow().isoformat()
+                elif status in [JobStatus.COMPLETED, JobStatus.FAILED, JobStatus.CANCELLED]:
+                    self._in_memory_jobs[job_id]['completed_at'] = datetime.utcnow().isoformat()
+            return
+        
+        try:
+            update_data = {'status': status}
+            if error_message:
+                update_data['error_message'] = error_message
+            if status == JobStatus.RUNNING:
+                update_data['started_at'] = datetime.utcnow().isoformat()
+            elif status in [JobStatus.COMPLETED, JobStatus.FAILED, JobStatus.CANCELLED]:
+                update_data['completed_at'] = datetime.utcnow().isoformat()
+            
+            self.client.table('jobs').update(update_data).eq('job_id', job_id).execute()
+            logger.info(f"Updated job {job_id} status to {status}")
+        except Exception as e:
+            logger.error(f"Failed to update job status: {str(e)}")
+    
+    async def update_job_progress(self, job_id: str, progress: JobProgress):
+        """Update job progress"""
+        if not self.client:
+            if job_id in self._in_memory_jobs:
+                self._in_memory_jobs[job_id]['progress'] = progress.dict()
+            return
+        
+        try:
+            update_data = {'progress': json.dumps(progress.dict())}
+            self.client.table('jobs').update(update_data).eq('job_id', job_id).execute()
+            logger.debug(f"Updated job {job_id} progress: {progress.percentage}%")
+        except Exception as e:
+            logger.error(f"Failed to update job progress: {str(e)}")
+    
+    async def add_job_result(self, job_id: str, result: JobResult):
+        """Add a result to a job"""
+        if not self.client:
+            if job_id in self._in_memory_jobs:
+                if 'results' not in self._in_memory_jobs[job_id]:
+                    self._in_memory_jobs[job_id]['results'] = []
+                self._in_memory_jobs[job_id]['results'].append(result.dict())
+            return
+        
+        try:
+            # Get current results
+            job_data = await self.get_job(job_id)
+            if job_data:
+                results = job_data.get('results', [])
+                results.append(result.dict())
+                
+                update_data = {'results': json.dumps(results)}
+                self.client.table('jobs').update(update_data).eq('job_id', job_id).execute()
+                logger.info(f"Added result to job {job_id}")
+        except Exception as e:
+            logger.error(f"Failed to add job result: {str(e)}")
+    
+    async def list_jobs(self, workflow_id: Optional[str] = None) -> List[Dict[str, Any]]:
+        """List jobs, optionally filtered by workflow_id"""
+        if not self.client:
+            jobs = list(self._in_memory_jobs.values())
+            if workflow_id:
+                jobs = [job for job in jobs if job.get('workflow_id') == workflow_id]
+            return jobs
+        
+        try:
+            query = self.client.table('jobs').select('*')
+            if workflow_id:
+                query = query.eq('workflow_id', workflow_id)
+            
+            result = query.execute()
+            jobs = []
+            for job_data in result.data:
+                job_data['progress'] = json.loads(job_data['progress'])
+                job_data['results'] = json.loads(job_data['results'])
+                jobs.append(job_data)
+            return jobs
+        except Exception as e:
+            logger.error(f"Failed to list jobs: {str(e)}")
+            return []
+
+
+# Global database service instance
+db_service = DatabaseService()
